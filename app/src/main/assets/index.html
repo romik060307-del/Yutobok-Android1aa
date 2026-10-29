@@ -1340,5 +1340,59 @@ new MutationObserver(sch).observe(document.documentElement,{childList:true,subtr
 if(document.readyState!=='loading')run();else document.addEventListener('DOMContentLoaded',run);
 })();
 </script>
+
+<style id="ohli-social-addon">
+.ohli-social-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px;padding-top:10px;border-top:1px solid var(--o-line,#262628)}
+.ohli-social-btn{border:1px solid #ffffff16;background:#14272c;color:var(--o-txt,#f2f2f2);border-radius:12px;padding:8px 11px;font-size:12px;font-weight:750;display:inline-flex;align-items:center;gap:6px}
+.ohli-social-btn.active{color:#21c063;background:#123b2b;border-color:#236a4a}
+.ohli-comment-area{display:none;margin-top:10px}.ohli-comment-area.open{display:block}
+.ohli-comment-list{display:grid;gap:7px;margin:8px 0}.ohli-comment{background:#101f23;border:1px solid #ffffff0c;border-radius:10px;padding:8px 10px;font-size:12px;overflow-wrap:anywhere}
+.ohli-comment-form{display:flex;gap:7px}.ohli-comment-form input{min-width:0;flex:1;background:#0a1b20;color:var(--o-txt,#f2f2f2);border:1px solid #24434a;border-radius:11px;padding:10px}
+.ohli-notice-btn{margin-left:auto}.ohli-notice-panel{display:none;margin:8px 0 12px}.ohli-notice-panel.open{display:block}
+.ohli-notice-item{padding:10px 12px;border-bottom:1px solid #ffffff12;font-size:12px;color:var(--o-txt,#f2f2f2)}
+body.v5-light .ohli-social-btn{background:#f4f8f7;color:#244143;border-color:#dce8e6}
+body.v5-light .ohli-social-btn.active{background:#e2f8ed;color:#087c57}
+body.v5-light .ohli-comment{background:#f7faf9;color:#203a3b;border-color:#e1ebea}
+body.v5-light .ohli-comment-form input{background:#fff;color:#1b3033;border-color:#d5e6e5}
+@media(max-width:759px){.ohli-social-btn{padding:9px 10px}.ohli-social-actions{gap:6px}}
+</style>
+<script id="ohli-social-addon-js">
+/* OHLI Social front-end add-on. Engagement data is local to this browser until matching server APIs are implemented. */
+(function(){
+'use strict';
+var PREFIX='ohli-social-v1:', seenPosts=new WeakSet();
+function read(key,fallback){try{var v=JSON.parse(localStorage.getItem(PREFIX+key)||'null');return v==null?fallback:v;}catch(_){return fallback;}}
+function write(key,val){try{localStorage.setItem(PREFIX+key,JSON.stringify(val));}catch(_){}}
+function currentUser(){var n=document.querySelector('.profile-mini-name');return n&&n.textContent.trim()||'Saya';}
+function keyFor(card){var name=card.querySelector('.ohli-row b');var text=card.querySelector('.ohli-text');var media=card.querySelector('.ohli-media');return [name&&name.textContent||'',text&&text.textContent||'',media&&media.getAttribute('src')||''].join('|').slice(0,700);}
+function notify(message){var arr=read('notifications',[]);arr.unshift({text:message,time:Date.now()});write('notifications',arr.slice(0,100));}
+function button(label,active){var b=document.createElement('button');b.type='button';b.className='ohli-social-btn'+(active?' active':'');b.textContent=label;return b;}
+function enhance(card){
+ if(seenPosts.has(card))return;seenPosts.add(card);
+ var k=keyFor(card),likes=read('likes',{}),liked=!!likes[k],follows=read('follows',{}),name=(card.querySelector('.ohli-row b')||{}).textContent||'Pengguna';
+ var actions=document.createElement('div');actions.className='ohli-social-actions';
+ var like=button((liked?'♥ Disukai':'♡ Suka')+' · '+(likes[k]&&likes[k].count||0),liked);
+ like.addEventListener('click',function(){var all=read('likes',{}),item=all[k]||{count:0};if(all[k]&&all[k].mine){item.count=Math.max(0,item.count-1);item.mine=false;}else{item.count=(item.count||0)+1;item.mine=true;notify('Kamu menyukai postingan '+name);}all[k]=item;write('likes',all);like.classList.toggle('active',!!item.mine);like.textContent=(item.mine?'♥ Disukai':'♡ Suka')+' · '+item.count;});
+ var comment=button('Komentar');var follow=button(follows[name]?'✓ Mengikuti':'+ Ikuti',!!follows[name]);
+ follow.addEventListener('click',function(){var all=read('follows',{});all[name]=!all[name];if(!all[name])delete all[name];write('follows',all);follow.classList.toggle('active',!!all[name]);follow.textContent=all[name]?'✓ Mengikuti':'+ Ikuti';notify((all[name]?'Mulai mengikuti ':'Berhenti mengikuti ')+name);});
+ var area=document.createElement('div');area.className='ohli-comment-area';var list=document.createElement('div');list.className='ohli-comment-list';var form=document.createElement('form');form.className='ohli-comment-form';var input=document.createElement('input');input.placeholder='Tulis komentar…';input.maxLength=500;input.setAttribute('aria-label','Tulis komentar');var send=button('Kirim');form.append(input,send);form.addEventListener('submit',function(e){e.preventDefault();var value=input.value.trim();if(!value)return;var all=read('comments',{});all[k]=all[k]||[];all[k].push({by:currentUser(),text:value,time:Date.now()});write('comments',all);input.value='';renderComments();notify('Komentar ditambahkan pada postingan '+name);});
+ function renderComments(){list.replaceChildren();(read('comments',{})[k]||[]).forEach(function(c){var row=document.createElement('div');row.className='ohli-comment';var strong=document.createElement('strong');strong.textContent=c.by+': ';row.append(strong,document.createTextNode(c.text));list.appendChild(row);});comment.textContent='Komentar · '+((read('comments',{})[k]||[]).length);}
+ renderComments();area.append(list,form);comment.addEventListener('click',function(){area.classList.toggle('open');if(area.classList.contains('open'))input.focus();});
+ actions.append(like,comment,follow);card.append(actions,area);
+}
+function setupNotifications(){
+ var wrap=document.querySelector('.ohli-wrap');if(!wrap||wrap.querySelector('.ohli-notice-btn'))return;
+ var row=document.createElement('div');row.className='ohli-row';row.style.margin='8px 0';
+ var b=button('♧ Notifikasi');b.classList.add('ohli-notice-btn');var panel=document.createElement('div');panel.className='ohli-card ohli-notice-panel';
+ function paint(){panel.replaceChildren();var arr=read('notifications',[]);if(!arr.length){var empty=document.createElement('p');empty.className='subtle';empty.textContent='Belum ada notifikasi di perangkat ini.';panel.appendChild(empty);}arr.slice(0,30).forEach(function(n){var item=document.createElement('div');item.className='ohli-notice-item';item.textContent=n.text+' · '+new Date(n.time).toLocaleString();panel.appendChild(item);});}
+ b.addEventListener('click',function(){panel.classList.toggle('open');paint();});row.appendChild(b);wrap.insertBefore(row,wrap.children[1]||null);wrap.insertBefore(panel,row.nextSibling);
+}
+function scan(){document.querySelectorAll('.ohli-post').forEach(enhance);setupNotifications();}
+var pending=false;var observer=new MutationObserver(function(){if(pending)return;pending=true;requestAnimationFrame(function(){pending=false;scan();});});
+observer.observe(document.documentElement,{childList:true,subtree:true});
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',scan);else scan();
+})();
+</script>
+
 </body>
 </html>
